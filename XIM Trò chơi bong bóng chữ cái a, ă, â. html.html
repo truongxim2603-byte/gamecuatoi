@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bé Học Chữ Cái - a, ă, â</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; overflow: hidden; background: #FEF3C7; font-family: 'Quicksand', sans-serif; touch-action: none; }
+        canvas { display: block; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
+        .game-ui { pointer-events: auto; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer" class="p-6 flex flex-col items-center h-screen">
+        <div class="bg-white/90 p-4 rounded-3xl shadow-lg border-4 border-yellow-400 text-center w-full max-w-sm game-ui">
+            <h1 class="text-2xl font-bold text-orange-600">Bé Hứng Chữ</h1>
+            <div class="text-lg text-gray-700">Chạm bóng có chữ <span class="text-red-600 font-bold">a, ă, â</span></div>
+            <div class="text-3xl font-bold text-green-700">Điểm: <span id="score">0</span></div>
+        </div>
+
+        <div id="start-screen" class="mt-20 bg-white p-8 rounded-3xl shadow-2xl text-center border-4 border-blue-400 game-ui">
+            <h2 class="text-3xl font-bold mb-4 text-blue-600">Chào bé yêu!</h2>
+            <p class="mb-6 text-xl text-gray-700">Bấm vào bong bóng có chữ <b>a, ă, â</b><br>để giúp bé học thật vui nhé!</p>
+            <button onclick="startGame()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition-transform hover:scale-105">Bắt đầu chơi!</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const startScreen = document.getElementById('start-screen');
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        let score = 0;
+        let gameActive = false;
+        let bubbles = [];
+        const targets = ['a', 'ă', 'â'];
+        const distractors = ['o', 'ô', 'ơ', 'e', 'ê', 'i', 'u'];
+
+        function playPopSound() {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.value = 800;
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function drawDecorations() {
+            // Đám mây (không vẽ ông mặt trời)
+            ctx.fillStyle = "#FFFFFF";
+            ctx.beginPath();
+            ctx.arc(100, 80, 40, 0, Math.PI * 2);
+            ctx.arc(140, 80, 50, 0, Math.PI * 2);
+            ctx.arc(180, 80, 40, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Cỏ và hoa ở dưới
+            ctx.fillStyle = "#22C55E"; // Màu cỏ đậm hơn
+            ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+        }
+
+        class Bubble {
+            constructor() {
+                this.radius = 45;
+                this.x = Math.random() * (canvas.width - 100) + 50;
+                this.y = canvas.height + 50;
+                this.speed = 1.5 + Math.random() * 1.5;
+                const isTarget = Math.random() > 0.4;
+                this.char = isTarget ? targets[Math.floor(Math.random() * targets.length)] : distractors[Math.floor(Math.random() * distractors.length)];
+                this.isTarget = isTarget;
+            }
+            update() { this.y -= this.speed; }
+            draw() {
+                // Màu bóng đậm hơn
+                ctx.fillStyle = this.isTarget ? "#DC2626" : "#2563EB";
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 5;
+                ctx.stroke();
+                
+                // Chữ màu đen, in thường
+                ctx.fillStyle = "black";
+                ctx.font = "bold 60px Quicksand";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.char, this.x, this.y + 5); // Dịch nhẹ để căn giữa chữ
+            }
+        }
+
+        function animate() {
+            if (!gameActive) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawDecorations();
+            bubbles.forEach((b, i) => {
+                b.update();
+                b.draw();
+                if (b.y < -50) bubbles.splice(i, 1);
+            });
+            requestAnimationFrame(animate);
+        }
+
+        function handleInteraction(x, y) {
+            bubbles.forEach((b, i) => {
+                if (Math.hypot(b.x - x, b.y - y) < b.radius) {
+                    playPopSound();
+                    if (b.isTarget) score += 10;
+                    else score = Math.max(0, score - 5);
+                    scoreEl.innerText = score;
+                    bubbles.splice(i, 1);
+                }
+            });
+        }
+
+        canvas.addEventListener('mousedown', (e) => handleInteraction(e.clientX, e.clientY));
+        canvas.addEventListener('touchstart', (e) => handleInteraction(e.touches[0].clientX, e.touches[0].clientY));
+
+        function spawn() {
+            if (gameActive) {
+                bubbles.push(new Bubble());
+                setTimeout(spawn, 900);
+            }
+        }
+
+        function startGame() {
+            gameActive = true;
+            startScreen.classList.add('hidden');
+            animate();
+            spawn();
+        }
+    </script>
+</body>
+</html>
